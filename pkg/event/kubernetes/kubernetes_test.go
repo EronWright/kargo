@@ -222,25 +222,13 @@ func TestFromKubernetesEvent(t *testing.T) {
 	}
 }
 
+// Every known event type must round trip back to its concrete type. Enumerating
+// KnownEventTypes rather than a local list means registering a new event type
+// automatically requires a decode case in FromKubernetesEvent.
 func TestFromKubernetesEvent_AllEventTypes(t *testing.T) {
-	// Test all supported event types to ensure they can be converted
-	eventTypes := []kargoapi.EventType{
-		kargoapi.EventTypePromotionCreated,
-		kargoapi.EventTypePromotionSucceeded,
-		kargoapi.EventTypePromotionFailed,
-		kargoapi.EventTypePromotionErrored,
-		kargoapi.EventTypePromotionAborted,
-		kargoapi.EventTypeFreightVerificationSucceeded,
-		kargoapi.EventTypeFreightVerificationFailed,
-		kargoapi.EventTypeFreightVerificationErrored,
-		kargoapi.EventTypeFreightVerificationAborted,
-		kargoapi.EventTypeFreightVerificationInconclusive,
-		kargoapi.EventTypeFreightVerificationUnknown,
-		kargoapi.EventTypeFreightCreated,
-		kargoapi.EventTypeFreightApproved,
-	}
+	require.NotEmpty(t, event.KnownEventTypes)
 
-	for _, eventType := range eventTypes {
+	for _, eventType := range event.KnownEventTypes {
 		t.Run(string(eventType), func(t *testing.T) {
 			var k8sEvent corev1.Event
 
@@ -298,6 +286,11 @@ func TestFromKubernetesEvent_AllEventTypes(t *testing.T) {
 			result, err := FromKubernetesEvent(k8sEvent)
 			require.NoError(t, err)
 			require.Equal(t, eventType, result.Type())
+			// A missing case in FromKubernetesEvent falls through to Custom,
+			// which takes its type from the Event's Reason and would therefore
+			// satisfy the assertion above. Reject it explicitly.
+			_, isCustom := result.(*event.Custom)
+			require.False(t, isCustom, "known event type decoded as Custom")
 		})
 	}
 }
@@ -391,6 +384,63 @@ func TestEventSender_Send(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, tc.expectedCalls, recorder.callCount)
+		})
+	}
+}
+
+// The involved object's APIVersion is what makes an Event discoverable: the
+// EventsByInvolvedObjectAPIGroup indexer skips Events whose APIVersion is empty,
+// and listing a Project's Events selects on that index. Send only sets the
+// APIVersion for types in KnownEventTypes, so registering a type is what makes
+// its Events visible at all.
+func TestEventSender_Send_InvolvedObjectAPIVersion(t *testing.T) {
+	testCases := map[string]struct {
+		event              event.Meta
+		expectedAPIVersion string
+		expectedKind       string
+		expectedName       string
+	}{
+		"known event type carries the Kargo API group": {
+			event: &event.AutoPromotionDenied{
+				Common: event.Common{
+					Project: "test-project",
+					Message: "Auto-promotion denied",
+				},
+				Freight: event.Freight{
+					Name:      "test-freight",
+					StageName: "test-stage",
+				},
+			},
+			expectedAPIVersion: kargoapi.GroupVersion.Identifier(),
+			expectedKind:       "Freight",
+			expectedName:       "test-freight",
+		},
+		"unknown event type has no API group": {
+			event: &customEvent{
+				EventType:  "CustomEventType",
+				Name:       "test-resource",
+				Project:    "test-project",
+				ObjectKind: "CustomResource",
+			},
+			expectedAPIVersion: "",
+			expectedKind:       "CustomResource",
+			expectedName:       "test-resource",
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			recorder := &mockEventRecorder{}
+			sender := NewEventSender(recorder)
+
+			require.NoError(t, sender.Send(t.Context(), tc.event))
+
+			ref, ok := recorder.lastObject.(*corev1.ObjectReference)
+			require.True(t, ok)
+			require.Equal(t, tc.expectedAPIVersion, ref.APIVersion)
+			require.Equal(t, tc.expectedKind, ref.Kind)
+			require.Equal(t, tc.expectedName, ref.Name)
+			require.Equal(t, "test-project", ref.Namespace)
 		})
 	}
 }
@@ -512,7 +562,9 @@ func isVerificationEvent(eventType kargoapi.EventType) bool {
 
 // Mock EventRecorder for testing
 type mockEventRecorder struct {
-	callCount int
+	callCount       int
+	lastObject      runtime.Object
+	lastAnnotations map[string]string
 }
 
 func (m *mockEventRecorder) Event(_ runtime.Object, _, _, _ string) {
@@ -523,10 +575,12 @@ func (m *mockEventRecorder) Eventf(_ runtime.Object, _, _, _ string, _ ...any) {
 	m.callCount++
 }
 
-func (m *mockEventRecorder) AnnotatedEventf(_ runtime.Object, _ map[string]string,
+func (m *mockEventRecorder) AnnotatedEventf(object runtime.Object, annotations map[string]string,
 	_, _, _ string, _ ...any,
 ) {
 	m.callCount++
+	m.lastObject = object
+	m.lastAnnotations = annotations
 }
 
 type customEvent struct {

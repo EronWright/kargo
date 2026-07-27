@@ -2012,8 +2012,7 @@ func (r *RegularStageReconciler) autoPromoteFreight(
 					),
 					api.FormatEventControllerActor(r.cfg.Name()),
 					stage.Name,
-					stage.Namespace,
-					candidate.Name,
+					&candidate,
 				)
 				if sendErr := r.eventSender.Send(ctx, evt); sendErr != nil {
 					logger.Error(sendErr, "failed to send auto-promotion denied event")
