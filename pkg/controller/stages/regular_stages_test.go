@@ -7546,6 +7546,89 @@ func TestRegularStageReconciler_autoPromoteFreight(t *testing.T) {
 			},
 		},
 		{
+			// A Forbidden error from an admission webhook must not fail the
+			// reconcile: nothing is persisted, one AutoPromotionDenied event is
+			// recorded, and the pass continues so a later reconcile can re-attempt.
+			name:                 "tolerates a forbidden Promotion create",
+			autoPromotionEnabled: true,
+			stage: &kargoapi.Stage{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "fake-project",
+					Name:      "test-stage",
+				},
+				Spec: kargoapi.StageSpec{
+					RequestedFreight: []kargoapi.FreightRequest{
+						{
+							Origin: kargoapi.FreightOrigin{
+								Kind: kargoapi.FreightOriginKindWarehouse,
+								Name: "test-warehouse",
+							},
+							Sources: kargoapi.FreightSources{
+								Direct: true,
+							},
+						},
+					},
+					PromotionTemplate: &kargoapi.PromotionTemplate{
+						Spec: kargoapi.PromotionTemplateSpec{
+							Steps: []kargoapi.PromotionStep{
+								{
+									Uses: "fake-step",
+								},
+							},
+						},
+					},
+				},
+			},
+			objects: []client.Object{
+				&kargoapi.Warehouse{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "fake-project",
+						Name:      "test-warehouse",
+					},
+				},
+				&kargoapi.Freight{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:         "fake-project",
+						Name:              "test-freight",
+						CreationTimestamp: metav1.Time{Time: now},
+					},
+					Origin: kargoapi.FreightOrigin{
+						Kind: kargoapi.FreightOriginKindWarehouse,
+						Name: "test-warehouse",
+					},
+				},
+			},
+			interceptor: interceptor.Funcs{
+				Create: func(context.Context, client.WithWatch, client.Object, ...client.CreateOption) error {
+					return &apierrors.StatusError{ErrStatus: metav1.Status{
+						Status:  metav1.StatusFailure,
+						Reason:  metav1.StatusReasonForbidden,
+						Message: "admission webhook denied the request",
+					}}
+				},
+			},
+			assertions: func(
+				t *testing.T,
+				recorder *fakeevent.EventRecorder,
+				c client.Client,
+				_ kargoapi.StageStatus,
+				err error,
+			) {
+				require.NoError(t, err)
+
+				// No Promotion is persisted when the create is denied.
+				promoList := &kargoapi.PromotionList{}
+				require.NoError(t, c.List(t.Context(), promoList, client.InNamespace("fake-project")))
+				assert.Empty(t, promoList.Items)
+
+				// Exactly one AutoPromotionDenied event is recorded.
+				require.Len(t, recorder.Events, 1)
+				event := <-recorder.Events
+				assert.Equal(t, string(kargoapi.EventTypeAutoPromotionDenied), event.Reason)
+				assert.Contains(t, event.Message, "denied by an admission webhook")
+			},
+		},
+		{
 			name:                 "skips promotion when origin is in the effective hold map",
 			autoPromotionEnabled: true,
 			stage: &kargoapi.Stage{
