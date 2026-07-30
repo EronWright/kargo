@@ -1,5 +1,7 @@
 package v1alpha1
 
+import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 // PromotionWindowKind indicates whether a PromotionWindow permits or forbids
 // promotions while it is active.
 //
@@ -79,4 +81,53 @@ type PromotionWindow struct {
 	//
 	// +optional
 	DTEnd string `json:"dtend,omitempty"`
+}
+
+// PromotionScheduleStatus reports the state of the promotion window schedule
+// gating a Stage -- the evaluated union of every PromotionWindow that matches
+// it, rather than any single window. It exists so that a client can tell that
+// promotions are currently frozen, and for how long, without having to attempt
+// one and interpret the resulting rejection.
+//
+// It is advisory. The value is only as current as the last reconciliation of
+// the Stage, so a client must not treat it as authorization: admission remains
+// the sole arbiter of whether a given Promotion is permitted. Its purpose is to
+// let a user interface explain a freeze before a user runs into it, not to
+// decide anything.
+//
+// Kargo Enterprise only: This type is ignored in Kargo OSS. The schedule is
+// evaluated and enforced only by Kargo Enterprise; OSS carries the API for
+// compatibility, as it does for other Enterprise-only fields.
+type PromotionScheduleStatus struct {
+	// Closed indicates that the schedule currently forbids promotion of this
+	// Stage.
+	//
+	// +optional
+	Closed bool `json:"closed,omitempty"`
+	// Reason explains in human-readable terms why the schedule is closed, naming
+	// the window responsible where one is. It is always set while Closed is true,
+	// and is the only field guaranteed to explain a freeze -- NextOpen may be
+	// absent. It carries the same explanation as the corresponding admission
+	// rejection.
+	//
+	// +optional
+	Reason string `json:"reason,omitempty"`
+	// NextOpen is when the schedule is next expected to permit promotions.
+	//
+	// It is optional even while Closed is true, and its absence means only that
+	// no reopening is known: the schedule may have none (a one-shot Allow window
+	// that has already elapsed), determining one may be impractical, or the
+	// closure may be indefinite by design. Clients must therefore render Reason
+	// and treat a missing NextOpen as "frozen, with no known end" rather than
+	// assuming a value is present.
+	//
+	// +optional
+	NextOpen *metav1.Time `json:"nextOpen,omitempty"`
+	// NextClose is when the schedule is next expected to forbid promotions, and
+	// is meaningful only while Closed is false. It allows a client to give warning
+	// of an approaching freeze. Like NextOpen it is optional, and absent when no
+	// such boundary is known.
+	//
+	// +optional
+	NextClose *metav1.Time `json:"nextClose,omitempty"`
 }
