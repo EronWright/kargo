@@ -2538,6 +2538,48 @@ spec:
                   status was reconciled against.
                 format: int64
                 type: integer
+              promotionSchedule:
+                description: |-
+                  PromotionSchedule reports whether promotion windows currently permit
+                  promotion of this Stage, and when that is next expected to change. It is
+                  absent when no window gates the Stage.
+
+                  Kargo Enterprise only: This field is ignored in Kargo OSS.
+                properties:
+                  closed:
+                    description: |-
+                      Closed indicates that the schedule currently forbids promotion of this
+                      Stage.
+                    type: boolean
+                  nextClose:
+                    description: |-
+                      NextClose is when the schedule is next expected to forbid promotions, and
+                      is meaningful only while Closed is false. It allows a client to give warning
+                      of an approaching freeze. Like NextOpen it is optional, and absent when no
+                      such boundary is known.
+                    format: date-time
+                    type: string
+                  nextOpen:
+                    description: |-
+                      NextOpen is when the schedule is next expected to permit promotions.
+
+                      It is optional even while Closed is true, and its absence means only that
+                      no reopening is known: the schedule may have none (a one-shot Allow window
+                      that has already elapsed), determining one may be impractical, or the
+                      closure may be indefinite by design. Clients must therefore render Reason
+                      and treat a missing NextOpen as "frozen, with no known end" rather than
+                      assuming a value is present.
+                    format: date-time
+                    type: string
+                  reason:
+                    description: |-
+                      Reason explains in human-readable terms why the schedule is closed, naming
+                      the window responsible where one is. It is always set while Closed is true,
+                      and is the only field guaranteed to explain a freeze -- NextOpen may be
+                      absent. It carries the same explanation as the corresponding admission
+                      rejection.
+                    type: string
+                type: object
             type: object
         required:
         - spec

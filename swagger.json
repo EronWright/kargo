@@ -7790,6 +7790,27 @@
         }
       }
     },
+    "PromotionScheduleStatus": {
+      "type": "object",
+      "properties": {
+        "closed": {
+          "description": "Closed indicates that the schedule currently forbids promotion of this\nStage.\n\n+optional",
+          "type": "boolean"
+        },
+        "nextClose": {
+          "description": "NextClose is when the schedule is next expected to forbid promotions, and\nis meaningful only while Closed is false. It allows a client to give warning\nof an approaching freeze. Like NextOpen it is optional, and absent when no\nsuch boundary is known.\n\n+optional",
+          "type": "string"
+        },
+        "nextOpen": {
+          "description": "NextOpen is when the schedule is next expected to permit promotions.\n\nIt is optional even while Closed is true, and its absence means only that\nno reopening is known: the schedule may have none (a one-shot Allow window\nthat has already elapsed), determining one may be impractical, or the\nclosure may be indefinite by design. Clients must therefore render Reason\nand treat a missing NextOpen as \"frozen, with no known end\" rather than\nassuming a value is present.\n\n+optional",
+          "type": "string"
+        },
+        "reason": {
+          "description": "Reason explains in human-readable terms why the schedule is closed, naming\nthe window responsible where one is. It is always set while Closed is true,\nand is the only field guaranteed to explain a freeze -- NextOpen may be\nabsent. It carries the same explanation as the corresponding admission\nrejection.\n\n+optional",
+          "type": "string"
+        }
+      }
+    },
     "PromotionSpec": {
       "type": "object",
       "properties": {
@@ -8340,6 +8361,14 @@
         "observedGeneration": {
           "description": "ObservedGeneration represents the .metadata.generation that this Stage\nstatus was reconciled against.",
           "type": "integer"
+        },
+        "promotionSchedule": {
+          "description": "PromotionSchedule reports whether promotion windows currently permit\npromotion of this Stage, and when that is next expected to change. It is\nabsent when no window gates the Stage.\n\nKargo Enterprise only: This field is ignored in Kargo OSS.\n\n+optional",
+          "allOf": [
+            {
+              "$ref": "#/definitions/PromotionScheduleStatus"
+            }
+          ]
         }
       }
     },
