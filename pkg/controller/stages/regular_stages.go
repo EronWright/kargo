@@ -1994,6 +1994,31 @@ func (r *RegularStageReconciler) autoPromoteFreight(
 		// PromotionTemplate.
 		promotion := api.NewMinimalPromotion(stage, candidate.Name)
 		if err = r.client.Create(ctx, promotion); err != nil {
+			// An admission webhook may deny the create. Tolerate this as a
+			// non-error: nothing is persisted, so this reconcile records one event
+			// and continues, and a later reconcile re-derives and re-attempts the
+			// auto-promotion once the denying policy no longer applies. Any other
+			// error is still fatal to the reconcile.
+			if apierrors.IsForbidden(err) {
+				freightLogger.Debug(
+					"auto-promotion was denied by an admission webhook",
+					"error", err.Error(),
+				)
+				evt := kargoEvent.NewAutoPromotionDenied(
+					fmt.Sprintf(
+						"Auto-promotion of Freight %q from origin %q for Stage %q "+
+							"was denied by an admission webhook: %s",
+						candidate.Name, origin, stage.Name, err.Error(),
+					),
+					api.FormatEventControllerActor(r.cfg.Name()),
+					stage.Name,
+					&candidate,
+				)
+				if sendErr := r.eventSender.Send(ctx, evt); sendErr != nil {
+					logger.Error(sendErr, "failed to send auto-promotion denied event")
+				}
+				continue
+			}
 			return newStatus, fmt.Errorf(
 				"error creating Promotion for Freight %q in namespace %q: %w",
 				candidate.Name, stage.Namespace, err,

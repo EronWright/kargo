@@ -37,6 +37,7 @@ const (
 	EventTypeFreightVerificationAborted      EventType = "FreightVerificationAborted"
 	EventTypeFreightVerificationInconclusive EventType = "FreightVerificationInconclusive"
 	EventTypeFreightVerificationUnknown      EventType = "FreightVerificationUnknown"
+	EventTypeAutoPromotionDenied             EventType = "AutoPromotionDenied"
 )
 
 const (

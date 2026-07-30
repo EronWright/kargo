@@ -31,6 +31,8 @@ func FromKubernetesEvent(evt corev1.Event) (event.Meta, error) {
 		parsedEvent, err = event.UnmarshalFreightCreatedAnnotations(id, evt.Annotations)
 	case kargoapi.EventTypeFreightApproved:
 		parsedEvent, err = event.UnmarshalFreightApprovedAnnotations(id, evt.Annotations)
+	case kargoapi.EventTypeAutoPromotionDenied:
+		parsedEvent, err = event.UnmarshalAutoPromotionDeniedAnnotations(id, evt.Annotations)
 	case kargoapi.EventTypeFreightVerificationSucceeded:
 		parsedEvent, err = event.UnmarshalFreightVerificationSucceededAnnotations(id, evt.Annotations)
 	case kargoapi.EventTypeFreightVerificationFailed:

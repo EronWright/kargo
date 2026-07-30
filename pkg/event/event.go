@@ -22,6 +22,7 @@ var KnownEventTypes = []kargoapi.EventType{
 	kargoapi.EventTypeFreightVerificationAborted,
 	kargoapi.EventTypeFreightVerificationInconclusive,
 	kargoapi.EventTypeFreightVerificationUnknown,
+	kargoapi.EventTypeAutoPromotionDenied,
 }
 
 // Meta is an interface for our built in event types that all of them implement

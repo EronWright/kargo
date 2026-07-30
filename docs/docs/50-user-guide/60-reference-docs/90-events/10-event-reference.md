@@ -140,6 +140,7 @@ The complete list of built-in Kargo event types is provided below:
 - `FreightVerificationAborted`
 - `FreightVerificationInconclusive`
 - `FreightVerificationUnknown`
+- `AutoPromotionDenied`
 
 Below are the detailed definitions for each event type.
 
@@ -273,3 +274,14 @@ This event is emitted when freight verification ends in an unknown state.
 - [Common event fields](#common-event-fields)
 - [Freight fields](#freight-fields)
 - [Freight verification fields](#freight-verification-fields)
+
+### `AutoPromotionDenied`
+
+This event is emitted when an admission webhook denies the creation of an
+auto-promotion. Because no `Promotion` resource is created, the event identifies
+the candidate freight that was denied, along with the stage it was destined for.
+
+**Payload Includes**
+
+- [Common event fields](#common-event-fields)
+- [Freight fields](#freight-fields)
